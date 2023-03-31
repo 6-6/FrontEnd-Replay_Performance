@@ -1,12 +1,121 @@
-## Performance 工具篇
+# Performance 工具篇
 Chrome DevTools 自带的 performance 工具，可以帮助我们分析网页的性能问题，从而帮助我们优化网页的性能。
 
-### 马上试试
+## 马上试试
 1. 首先要打开无痕窗口，这样最大程度可以避免其他插件的干扰。
 1. 打开 Chrome DevTools，点击 Performance 面板。
 1. 点击 Record 按钮，开始录制，需要主动 stop 进行关闭。reload 按钮则会刷新页面并录制，会自动关闭，适合记录首屏渲染。
 1. 在录制的过程中，你可以在页面上进行操作，比如点击按钮、滚动页面等。
 
+## Performance 面板
+## 常见的 Timeline event（时间轴事件）属性
+时间轴事件模式显示在录制过程中触发的所有事件。使用时间轴事件引用了解有关每个时间轴事件类型的更多信息。
+
+所有类型的事件都存在某些细节，而某些细节仅适用于某些事件类型。本节列出了不同事件类型的共同属性。特定于某些事件类型的属性在随后的那些事件类型的参考中列出。
+
+| 属性 | 何时显示 |
+| --- | --- |
+| Aggregated time | 对于具有[嵌套事件](https://developer.chrome.com/docs/devtools/evaluate-performance/timeline-tool#view-nested-events)的事件，每个事件类别所需的时间。 |
+| Call Stack | 对于具有[子事件](https://developer.chrome.com/docs/devtools/evaluate-performance/timeline-tool#view-nested-events)的事件，每个事件类别所需的时间。 |
+| CPU time | 记录的事件所需的CPU时间。 |
+| Details | 有关事件的其他详细信息。 |
+| Duration (at time-stamp) | 事件及其所有子项完成所需的时间；时间戳是事件发生的时间，相对于录制开始的时间。 |
+| Self time | 没有任何子项的事件所需的时间。 |
+| Used Heap Size | 记录事件时应用程序使用的内存量，以及自上次采样以来使用堆大小的增量（+/-）。 |
+
+## 加载事件
+
+本节列出属于加载类别的事件及其属性。
+
+| 事件 | 描述 |
+| --- | --- |
+| Parse HTML | Chrome执行了其HTML解析算法。 |
+| Finish Loading | 网络请求已完成。 |
+| Receive Data | 接收到请求的数据。将有一个或多个“接收数据”事件。 |
+| Receive Response | 请求的初始HTTP响应。 |
+| Send Request | 已发送网络请求。 |
+
+### 加载事件属性
+
+| 属性 | 描述 |
+| --- | --- |
+| Resource | 请求资源的URL。 |
+| Preview | 请求资源的预览（仅限图像）。 |
+| Request Method | 用于请求的HTTP方法（例如GET或POST）。 |
+| Status Code | HTTP响应代码。 |
+| MIME Type | 请求资源的MIME类型。 |
+| Encoded Data Length | 请求资源的长度（以字节为单位）。 |
+
+## 脚本事件
+
+本节列出了属于脚本类别的事件及其属性。
+
+| Event | Description |
+| --- | --- |
+| Animation Frame Fired | 已调度的动画帧已触发，其回调处理程序被调用。 |
+| Cancel Animation Frame | 已取消预定的动画帧。 |
+| GC Event | 发生了垃圾回收。 |
+| DOMContentLoaded | 浏览器触发了 [DOMContentLoaded](https://developer.mozilla.org/docs/Web/Events/DOMContentLoaded) 事件。当页面的 DOM 内容已被加载和解析时，会触发此事件。 |
+| Evaluate Script | 已评估脚本。 |
+| Event | JavaScript 事件（例如“mousedown”或“key”）。 |
+| Function Call | 执行了顶层 JavaScript 函数调用（仅在浏览器进入 JavaScript 引擎时显示）。 |
+| Install Timer | 使用 [setInterval()](https://developer.mozilla.org/docs/Web/API/WindowTimers/setInterval) 或 [setTimeout()](https://developer.mozilla.org/docs/Web/API/WindowTimers/setTimeout) 创建了一个计时器。 |
+| Request Animation Frame | 通过 `requestAnimationFrame()` 调用预定了一个新帧。 |
+| Remove Timer | 已清除之前创建的计时器。 |
+| Time | 脚本调用了 [console.time()](https://developer.chrome.com/docs/devtools/console/reference#consoletimelabel) |
+| Time End | 脚本调用了 [console.timeEnd()](https://developer.chrome.com/docs/devtools/console/reference#consoletimeendlabel) |
+| Timer Fired | 由 `setInterval()` 或 `setTimeout()` 预定的计时器触发。 |
+| XHR Ready State Change | XMLHTTPRequest 的就绪状态已更改。 |
+| XHR Load | `XMLHTTPRequest` 已完成加载。 |
+
+### 脚本事件属性
+
+| Property | Description |
+| --- | --- |
+| Timer ID | 计时器 ID。 |
+| Timeout | 计时器指定的超时时间。 |
+| Repeats | 布尔值，指定计时器是否重复。 |
+| Function Call | 调用的函数。 |
+
+## 渲染事件
+
+本节列出了属于渲染类别的事件及其属性。
+
+| Event | Description |
+| --- | --- |
+| Invalidate layout | DOM 更改导致页面布局无效。 |
+| Layout | 执行了页面布局。 |
+| Recalculate style | Chrome 重新计算元素样式。 |
+| Scroll | 嵌套视图的内容已滚动。 |
+
+### 渲染事件属性
+
+| 属性 | 描述 |
+| --- | --- |
+| Layout invalidated | 对于布局记录，导致布局失效的代码堆栈跟踪。 |
+| Nodes that need layout | 对于布局记录，在重新布局开始之前标记为需要布局的节点数。通常这些是被开发者代码使无效的节点，以及向上到重新布局根的路径。 |
+| Layout tree size | 对于布局记录，重新布局根（Chrome开始重新布局的节点）下的总节点数。 |
+| Layout scope | 可能的值为“Partial”（重新布局边界是DOM的一部分）或“Whole document”。 |
+| Elements affected | 对于重新计算样式记录，受样式重新计算影响的元素数量。 |
+| Styles invalidated | 对于重新计算样式记录，提供导致样式失效的代码堆栈跟踪。 |
+
+## 绘制事件
+
+本节列出属于绘制类别的事件及其属性。
+
+| 事件 | 描述 |
+| --- | --- |
+| Composite Layers | Chrome的渲染引擎合成的图像层。 |
+| Image Decode | 图像资源被解码。 |
+| Image Resize | 图像从其原始尺寸调整大小。 |
+| Paint | 合成图层被绘制到显示区域的一部分。将鼠标悬停在Paint记录上会突出显示更新的显示区域。 |
+
+### 绘制事件属性
+
+| 属性 | 描述 |
+| --- | --- |
+| Location | 对于Paint事件，绘制矩形的x和y坐标。 |
+| Dimensions | 对于Paint事件，绘制区域的高度和宽度。 |
 
 ### Chrome Performance 工具使用
 

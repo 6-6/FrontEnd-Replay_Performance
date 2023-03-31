@@ -1,14 +1,14 @@
 # vue性能优化及原理
 
 ## 参考
-本文根据黄轶的老师文章 [揭秘 Vue.js 九个性能优化技巧](https://juejin.cn/post/6922641008106668045) 启发整理而成，本文会分析优化的原理。
+本文根据黄轶的老师文章 [揭秘 Vue.js 九个性能优化技巧](https://juejin.cn/post/6922641008106668045) 启发整理而成，本文会根据自己的实践并且分析优化的原理。
 
 * [揭秘 Vue.js 九个性能优化技巧](https://juejin.cn/post/6922641008106668045)
 
 ## 前期准备
 该项目由 Vue.js 核心成员 [Guillaume Chau](https://github.com/Akryum) 分享的[PPT](https://slides.com/akryum/vueconfus-2019)。该项目是一个 Vue.js 性能优化的示例项目，包含了 9 个性能优化技巧。
 
-关于 performance 工具的使用，可以用 [Performance 工具篇](../../devTools/performance/README.md) 这篇文章作为参考。
+关于 performance 工具的使用，可以用我总结的 [Performance 工具篇](../../devTools/performance/README.md) 这篇文章作为参考。
 
 ### 安装依赖
 ```bash
@@ -441,14 +441,93 @@ function render() {
 }
 ```
 
-当条件 props.value 的值变化的时候，会触发对应的组件更新，对于 v-show 渲染的节点，由于新旧 vnode 一致，它们只需要一直 patchVnode 即可，那么它又是怎么让 DOM 节点显示和隐藏的呢？
+`v-if`是一种条件渲染指令。每次条件的值发生改变时，`v-if`会重新渲染DOM元素，因为它是在每次渲染时动态插入和移除元素的。
 
-原来在 patchVnode 过程中，内部会对执行 v-show 指令对应的钩子函数 update，然后它会根据 v-show 指令绑定的值来设置它作用的 DOM 元素的 style.display 的值控制显隐。
+`v-show`也是一种条件渲染指令，在CSS中控制元素的显示或隐藏，隐藏元素的`display`属性设置为`none`，而显示则是去掉该属性。
 
-因此相比于 v-if 不断删除和创建函数新的 DOM，v-show 仅仅是在更新现有 DOM 的显隐值，所以 v-show 的开销要比 v-if 小的多，当其内部 DOM 结构越复杂，性能的差异就会越大。
+**注意：** 在使用 `v-show` 的时候，无论隐藏或是显示所有子组件都会渲染，对应的生命周期钩子函数都会执行，而使用 `v-if` 的时候，没有命中的子组件是不会渲染的，对应的生命周期钩子函数都不会执行。
 
-但是 v-show 相比于 v-if 的性能优势是在组件的更新阶段，如果仅仅是在初始化阶段，v-if 性能还要高于 v-show，原因是在于它仅仅会渲染一个分支，而 v-show 把两个分支都渲染了，通过 style.display 来控制对应 DOM 的显隐。
+`v-if`和`v-show`都可能引起DOM的回流（reflow），但只有`v-if`会引起DOM的重绘（repaint）。需要注意的是，虽然`v-show`不会引起重绘，但是如果频繁地改变元素的`display`属性，也会导致性能下降，因为浏览器需要不断地重新计算元素的布局信息。
 
-在使用 v-show 的时候，所有分支内部的组件都会渲染，对应的生命周期钩子函数都会执行，而使用 v-if 的时候，没有命中的分支内部的组件是不会渲染的，对应的生命周期钩子函数都不会执行。
+**总结：** 如果需要频繁切换，则使用 `v-show` 较好；如果在运行时绑定条件很少改变，则 `v-if` 会更合适。
 
-因此你要搞清楚它们的原理以及差异，才能在不同的场景使用适合的指令。
+> 同时使用 v-if 和 v-for 是不推荐的，因为这样二者的优先级不明显。
+
+### KeepAlive（缓存组件）
+使用 KeepAlive 组件缓存 DOM，我们点击按钮在 Simple page 和 Heavy Page 之间切换，会渲染不同的视图，其中 Heavy Page 的渲染非常耗时。
+
+优化前的组件代码如下：
+
+```html
+<template>
+  <div id="app">
+    <router-view/>
+  </div>
+</template>
+![](./imgs/keep-alive1.png)
+
+优化后的组件代码如下：
+
+```html
+<template>
+  <div id="app">
+    <keep-alive>
+      <router-view/>
+    </keep-alive>
+  </div>
+</template>
+```
+![](./imgs/keep-alive2.png)
+
+切换路由视图，都会重新渲染一次组件，渲染组件就会经过组件初始化，render、patch 等过程，如果组件比较复杂，或者嵌套较深，那么整个渲染耗时就会很长。
+
+我们可以使用 KeepAlive 组件缓存 Heavy Page 的 DOM，当我们切换到 Heavy Page 的时候，不会重新渲染 Heavy Page，而是直接复用缓存的 DOM。
+
+但是使用 KeepAlive 组件并非没有成本，因为它会占用更多的内存去做缓存，这是一种典型的空间换时间优化思想的应用。
+
+## Deferred features（延时功能）
+使用 `Deferred` 组件延时分批渲染组件
+
+优化前的组件代码如下：
+```html
+<template>
+  <div class="deferred-off">
+    <VueIcon icon="fitness_center" class="gigantic"/>
+
+    <h2>I'm an heavy page</h2>
+
+    <Heavy v-for="n in 8" :key="n"/>
+
+    <Heavy class="super-heavy" :n="9999999"/>
+  </div>
+</template>
+```
+
+优化后的组件代码如下：
+```html
+<template>
+  <div class="deferred-on">
+    <VueIcon icon="fitness_center" class="gigantic"/>
+
+    <h2>I'm an heavy page</h2>
+
+    <template v-if="defer(2)">
+      <Heavy v-for="n in 8" :key="n"/>
+    </template>
+
+    <Heavy v-if="defer(3)" class="super-heavy" :n="9999999"/>
+  </div>
+</template>
+
+<script>
+import Defer from '@/mixins/Defer'
+
+export default {
+  mixins: [
+    Defer(),
+  ],
+}
+</script>
+```
+
+我们点击按钮在 Simple page 和 Heavy Page 之间切换，会渲染不同的视图，其中 Heavy Page 的渲染非常耗时。我们开启 Chrome 的 Performance 面板记录它们的性能，然后分别在优化前后执行如上的操作，会得到如下结果。
