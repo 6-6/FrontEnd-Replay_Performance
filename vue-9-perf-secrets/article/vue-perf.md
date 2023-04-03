@@ -485,7 +485,7 @@ function render() {
 
 但是使用 KeepAlive 组件并非没有成本，因为它会占用更多的内存去做缓存，这是一种典型的空间换时间优化思想的应用。
 
-## Deferred features（延时功能）
+## Deferred features（延时渲染）
 使用 `Deferred` 组件延时分批渲染组件
 
 优化前的组件代码如下：
@@ -502,6 +502,8 @@ function render() {
   </div>
 </template>
 ```
+
+![](./imgs/deferred1.png)
 
 优化后的组件代码如下：
 ```html
@@ -530,4 +532,85 @@ export default {
 </script>
 ```
 
-我们点击按钮在 Simple page 和 Heavy Page 之间切换，会渲染不同的视图，其中 Heavy Page 的渲染非常耗时。我们开启 Chrome 的 Performance 面板记录它们的性能，然后分别在优化前后执行如上的操作，会得到如下结果。
+![](./imgs/deferred2.png)
+
+我们点击 play 按钮，再勾选 screenShots（截图），然后点击 start（开始）按钮，开始录制页面，录制 10 秒以上，然后点击 stop（停止）按钮，可以看到页面渲染的过程。 
+
+![](./imgs/deferred3.png)
+为什么未优化的切换那么卡顿呢？本质上是 scripting 占用了时间，也就是说 JavaScript 阻塞了渲染。可以看到上图 heavy page 的加载是渐进式的，而不是一次性全部渲染完成。
+
+优化前后的差距主要是后者使用了 Defer 这个 mixin，那么它具体是怎么工作的，我们来一探究竟：
+
+```js
+export default function (count = 10) {
+  return {
+    data () {
+      return {
+        displayPriority: 0
+      }
+    },
+
+    mounted () {
+      this.runDisplayPriority()
+    },
+
+    methods: {
+      runDisplayPriority () {
+        const step = () => {
+          requestAnimationFrame(() => {
+            this.displayPriority++
+            if (this.displayPriority < count) {
+              step()
+            }
+          })
+        }
+        step()
+      },
+
+      defer (priority) {
+        return this.displayPriority >= priority
+      }
+    }
+  }
+}
+```
+
+`Defer` 的主要思想就是把一个组件的一次渲染拆成多次，它内部维护了 `displayPriority` 变量，然后在通过 `requestAnimationFrame` 在每一帧渲染的时候自增，最多加到 `count`。然后使用 `Defer mixin` 的组件内部就可以通过 `v-if="defer(xxx)"` 的方式来控制在 `displayPriority` 增加到 `xxx` 的时候渲染某些区块了。
+
+当你有渲染耗时的组件，使用 `Deferred` 做渐进式渲染是不错的注意，它能避免一次 `render` 由于 JS 执行时间过长导致渲染卡住的现象。
+
+## Time slicing
+点击 vuex demo 看看相关示例，这里使用了 Time slicing 时间片切割技术
+
+优化前的代码如下：
+```js
+fetchItems ({ commit }, { items }) {
+  commit('clearItems')
+  commit('addItems', items)
+}
+```
+![](./imgs/time-slicing1.png)
+
+优化后的代码如下：
+
+```js
+fetchItems ({ commit }, { items, splitCount }) {
+  commit('clearItems')
+  const queue = new JobQueue()
+  splitArray(items, splitCount).forEach(
+    chunk => queue.addJob(done => {
+      // 分时间片提交数据
+      requestAnimationFrame(() => {
+        commit('addItems', chunk)
+        done()
+      })
+    })
+  )
+  await queue.start()
+}
+```
+![](./imgs/time-slicing2.png)
+
+点击设置图标，我们先通过点击 `Genterate items` 按钮创建 10000 条假数据，同时可以开启 `loading animation` 打开loading 效果，然后分别在开启和关闭 `Time-slicing` 的情况下点击 `Commit items` 按钮提交数据。
+
+这次的 scripting 加载时间是差不多的，在实际体验中卡顿感也差距不大
